@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Countdown Timer</title>
+  <style>
+    body {
+      margin: 0;
+      background: white;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .countdown-timer {
+      position: relative;
+      background: white;
+      padding: 0.5rem 0.75rem;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      user-select: none;
+    }
+
+    .countdown-time-display {
+      font-size: 2rem;          /* slightly smaller */
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      min-width: 5ch;
+      text-align: center;
+      margin-bottom: 0.2rem;
+    }
+
+    .countdown-controls {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .countdown-controls button {
+      font-size: 0.7rem;        /* smaller font */
+      padding: 0.2rem 0.4rem;   /* smaller buttons */
+      border: 1px solid #aaa;
+      background: #f4f4f4;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .countdown-controls button:hover:not(:disabled) {
+      background: #e4e4e4;
+    }
+
+    .countdown-controls button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .countdown-settings {
+      font-size: 0.65rem;
+      opacity: 0.8;
+      display: flex;
+      gap: 0.25rem;
+      align-items: center;
+    }
+
+    .countdown-settings input {
+      width: 2.5rem;
+      font-size: 0.7rem;
+      padding: 0.1rem;
+    }
+
+    /* pulse animation */
+    .countdown-pulse {
+      animation: countdown-pulse 0.25s ease-out;
+    }
+
+    @keyframes countdown-pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.07); }
+      100% { transform: scale(1); }
+    }
+
+    /* version label */
+    .countdown-version {
+      position: absolute;
+      bottom: 2px;
+      right: 4px;
+      font-size: 0.5rem;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+</style>
+</head>
+
+<body>
+  <div class="countdown-timer" id="countdown-timer">
+    <div class="countdown-time-display" id="countdown-display">05:00</div>
+
+    <div class="countdown-controls">
+      <button id="countdown-start">Start</button>
+      <button id="countdown-pause" disabled>Pause</button>
+      <button id="countdown-stop" disabled>Stop</button>
+    </div>
+
+    <div class="countdown-settings">
+      <span>Minutes:</span>
+      <input type="number" id="countdown-minutes" min="0" value="5" />
+    </div>
+
+    <div class="countdown-version">v0.2</div>
+  </div>
+
+  <script>
+    (function () {
+      const displayEl = document.getElementById("countdown-display");
+      const startBtn = document.getElementById("countdown-start");
+      const pauseBtn = document.getElementById("countdown-pause");
+      const stopBtn = document.getElementById("countdown-stop");
+      const minutesInput = document.getElementById("countdown-minutes");
+
+      // --- URL parameters: t (minutes) and wait (true/false) -----------------
+      let initialMinutes = 5;
+      let autoStartOnLoad = true;
+
+      try {
+        const params = new URLSearchParams(window.location.search);
+
+        const tParam = params.get("t");
+        if (tParam !== null) {
+          const parsed = Number(tParam);
+          if (!isNaN(parsed) && parsed >= 0) {
+            initialMinutes = parsed;
+          }
+        }
+
+        const waitParam = params.get("wait");
+        if (waitParam && waitParam.toLowerCase() === "true") {
+          autoStartOnLoad = false;
+        }
+      } catch (e) {}
+
+      minutesInput.value = initialMinutes;
+
+      let totalDurationMs = initialMinutes * 60 * 1000;
+      let remainingMs = totalDurationMs;
+      let timerId = null;
+      let lastTimestamp = null;
+      let state = "stopped";
+      let lastTickSecond = null;
+      let audioCtx = null;
+
+      function initDurationFromInput() {
+        const mins = Math.max(0, Number(minutesInput.value) || 0);
+        totalDurationMs = mins * 60 * 1000;
+        remainingMs = totalDurationMs;
+        updateDisplay(remainingMs);
+      }
+
+      function formatTime(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      }
+
+      function updateDisplay(ms) {
+        displayEl.textContent = formatTime(ms);
+      }
+
+      function getAudioContext() {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          audioCtx = new AC();
+        }
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      }
+
+      function beep(frequency, durationMs, volume, type = "sine") {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.value = frequency;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        gain.gain.value = volume;
+        osc.start();
+
+        const now = ctx.currentTime;
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + durationMs / 1000);
+
+        osc.stop(now + durationMs / 1000 + 0.05);
+      }
+
+      function playTick() {
+        beep(1200, 60, 0.1, "square");
+        displayEl.classList.remove("countdown-pulse");
+        void displayEl.offsetWidth;
+        displayEl.classList.add("countdown-pulse");
+      }
+
+      function playEndRing() {
+        const pattern = [
+          { delay: 0, freq: 880 },
+          { delay: 0.15, freq: 1200 },
+          { delay: 0.3, freq: 1000 }
+        ];
+        pattern.forEach(step => {
+          setTimeout(() => beep(step.freq, 180, 0.2, "sine"), step.delay * 1000);
+        });
+      }
+
+      function setControlsForState() {
+        startBtn.disabled = state === "running";
+        pauseBtn.disabled = state !== "running";
+        stopBtn.disabled = state === "stopped";
+        minutesInput.disabled = state !== "stopped";
+      }
+
+      function startTimer() {
+        if (state === "stopped") initDurationFromInput();
+        if (remainingMs <= 0) remainingMs = totalDurationMs;
+
+        state = "running";
+        lastTimestamp = performance.now();
+        lastTickSecond = null;
+
+        if (timerId !== null) clearInterval(timerId);
+        timerId = setInterval(tick, 50);
+
+        setControlsForState();
+      }
+
+      function pauseTimer() {
+        if (state !== "running") return;
+        state = "paused";
+        clearInterval(timerId);
+        timerId = null;
+        setControlsForState();
+      }
+
+      function stopTimer() {
+        clearInterval(timerId);
+        timerId = null;
+        state = "stopped";
+        initDurationFromInput();
+        lastTickSecond = null;
+        setControlsForState();
+      }
+
+      function tick() {
+        const now = performance.now();
+        const dt = now - lastTimestamp;
+        lastTimestamp = now;
+
+        remainingMs -= dt;
+        if (remainingMs <= 0) {
+          remainingMs = 0;
+          updateDisplay(remainingMs);
+          clearInterval(timerId);
+          timerId = null;
+          state = "stopped";
+          setControlsForState();
+          lastTickSecond = null;
+          playEndRing();
+          return;
+        }
+
+        updateDisplay(remainingMs);
+
+        if (remainingMs <= 5000) {
+          const sec = Math.ceil(remainingMs / 1000);
+          if (sec !== lastTickSecond) {
+            lastTickSecond = sec;
+            playTick();
+          }
+        }
+      }
+
+      startBtn.addEventListener("click", startTimer);
+      pauseBtn.addEventListener("click", pauseTimer);
+      stopBtn.addEventListener("click", stopTimer);
+
+      minutesInput.addEventListener("change", () => {
+        if (state === "stopped") initDurationFromInput();
+      });
+
+      // Initial UI setup
+      initDurationFromInput();
+      setControlsForState();
+
+      // Auto-start logic
+      if (autoStartOnLoad && totalDurationMs > 0) {
+        window.requestAnimationFrame(startTimer);
+      }
+
+      // Optionally expose startTimer for external control
+      window.startTimer = startTimer;
+    })();
+  </script>
+</body>
+</html>
