@@ -9,13 +9,12 @@
   inside presentation slides (reveal.js, slides.com, etc.). Transparent
   background by default so it sits cleanly on any slide.
 
-  LAYOUT (5 rows)
+  LAYOUT (4 rows)
   ---------------
-  Row 1 — Controls     : [ Start ]  [ Pause ]  [ Stop ]
+  Row 1 — Controls     : [ ▶ ]  [ ⏸ ]  [ ⏹ ]          HH:MM
   Row 2 — Countdown    : large MM:SS display; turns red with "+" prefix in overtime
   Row 3 — Presentation : cumulative running total for the session  [ Reset ]
-  Row 4 — World        : current local wall-clock time (24 h, HH:MM)
-  Row 5 — Minutes      : editable duration input (only when stopped)
+  Row 4 — Minutes      : editable duration input (only when stopped)
 
   FEATURES
   --------
@@ -163,9 +162,10 @@
     }
 
     .countdown-world-clock {
-      font-size: 0.7rem;
-      opacity: 0.8;
-      text-align: center;
+      font-size: 0.65rem;
+      opacity: 0.75;
+      margin-left: auto;
+      letter-spacing: 0.03em;
     }
 
     .countdown-reset-total {
@@ -194,11 +194,13 @@
     .countdown-controls {
       display: flex;
       gap: 0.25rem;
+      align-items: center;
+      align-self: stretch;
     }
 
     .countdown-controls button {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.4rem;
+      font-size: 0.85rem;
+      padding: 0.15rem 0.4rem;
       border: 1px solid #aaa;
       background: #f4f4f4;
       border-radius: 3px;
@@ -301,9 +303,10 @@
 <body>
   <div class="countdown-timer" id="countdown-timer">
     <div class="countdown-controls">
-      <button id="countdown-start">Start</button>
-      <button id="countdown-pause" disabled>Pause</button>
-      <button id="countdown-stop" disabled>Stop</button>
+      <button id="countdown-start" title="Start / Resume">▶</button>
+      <button id="countdown-pause" disabled title="Pause (keeps time)">⏸</button>
+      <button id="countdown-stop" disabled title="Stop &amp; reset">⏹</button>
+      <span class="countdown-world-clock" id="countdown-world-clock">00:00</span>
     </div>
 
     <div class="countdown-time-display" id="countdown-display">05:00</div>
@@ -312,8 +315,6 @@
       <div class="countdown-total-display" id="countdown-total">Presentation: 00:00</div>
       <button class="countdown-reset-total" id="countdown-reset-total" title="Reset cumulative total">Reset</button>
     </div>
-
-    <div class="countdown-world-clock" id="countdown-world-clock">World: 00:00</div>
 
     <div class="countdown-settings">
       <span>Minutes:</span>
@@ -390,7 +391,7 @@
         const now = new Date();
         const h = now.getHours().toString().padStart(2, "0");
         const m = now.getMinutes().toString().padStart(2, "0");
-        worldClockEl.textContent = "World: " + h + ":" + m;
+        worldClockEl.textContent = h + ":" + m;
       }
 
       let lastGlobalSave = performance.now();
