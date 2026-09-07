@@ -102,13 +102,18 @@
   <script>
     (function () {
       // --- URL parameters ---
+      // Keys and values are matched case-insensitively, so ?secondHand=False,
+      // ?secondhand=NO and ?DarkMode=Yes all work as written.
       let showSeconds = true;
       try {
-        const p = new URLSearchParams(window.location.search);
-        if (["yes", "true"].includes((p.get("darkmode") || "").toLowerCase())) {
+        const params = {};
+        new URLSearchParams(window.location.search).forEach(function (value, key) {
+          params[key.toLowerCase()] = value.toLowerCase();
+        });
+        if (["yes", "true"].includes(params.darkmode || "")) {
           document.body.classList.add("dark-mode");
         }
-        if (["false", "no", "0"].includes((p.get("secondHand") || "").toLowerCase())) {
+        if (["false", "no", "0"].includes(params.secondhand || "")) {
           showSeconds = false;
         }
       } catch (e) {}
