@@ -1,6 +1,6 @@
 <!--
 ================================================================================
-  clockFace.html — Analog Clock Face  (v0.1)
+  clockFace.html — Analog Clock Face  (v0.2)
 ================================================================================
 
   PURPOSE
@@ -11,7 +11,9 @@
   DESIGN
   ------
   Minimal Apple Watch-inspired face: 12 hour markers (no numerals), hour,
-  minute, and seconds hands. Smooth sweep animation via requestAnimationFrame.
+  minute, and seconds hands. Smooth sweep animation via requestAnimationFrame,
+  capped at ~30fps and paused whenever the tab/slide is off-screen so several
+  faces can share a deck without burning cycles.
 
   URL PARAMETERS
   --------------
@@ -98,7 +100,7 @@
     <!-- Version -->
     <text x="100" y="140" text-anchor="middle"
           font-family="system-ui, sans-serif" font-size="6"
-          fill="var(--marker-color)" opacity="0.3">v0.1</text>
+          fill="var(--marker-color)" opacity="0.3">v0.2</text>
 
   </svg>
 
@@ -146,7 +148,7 @@
         el.setAttribute("transform", `rotate(${deg.toFixed(4)}, 100, 100)`);
       }
 
-      function tick() {
+      function render() {
         const now = new Date();
         const h  = now.getHours() % 12;
         const m  = now.getMinutes();
@@ -160,11 +162,49 @@
         rotate(hourHand,   hourAngle);
         rotate(minuteHand, minAngle);
         rotate(secondHand, secAngle);
-
-        requestAnimationFrame(tick);
       }
 
-      tick();
+      // Cap redraws at ~30fps — still a smooth sweep, but half the work of an
+      // unthrottled rAF loop and noticeably kinder when several faces share
+      // a slide.
+      const FRAME_MS = 1000 / 30;
+      let rafId = null;
+      let lastFrame = 0;
+
+      function tick(ts) {
+        rafId = requestAnimationFrame(tick);
+        if (ts - lastFrame < FRAME_MS) return;
+        lastFrame = ts;
+        render();
+      }
+
+      function start() {
+        if (rafId === null) {
+          lastFrame = 0;
+          rafId = requestAnimationFrame(tick);
+        }
+      }
+
+      function stop() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      }
+
+      // Pause entirely when the tab or slide is off-screen; snap to the
+      // correct time and resume the instant it returns.
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+          stop();
+        } else {
+          render();
+          start();
+        }
+      });
+
+      render();
+      start();
     })();
   </script>
 </body>
